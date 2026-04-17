@@ -1,0 +1,231 @@
+---
+title: "Higher_Education"
+author: "Anthony Zhong"
+date: "2026-03-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Libraries and API key
+```{r}
+suppressPackageStartupMessages(library(conflicted))
+suppressPackageStartupMessages(library(ipumsr))
+suppressPackageStartupMessages(library(tidyverse))
+
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(dplyr::select)
+
+#set_ipums_api_key(Insert API Key)
+```
+
+Extract Data
+```{r}
+usa_extract <- define_extract_micro(
+  collection = "usa",
+  description = "Recent college grads labor outcomes 2023-2024 ACS",
+  samples = c("us2023a", "us2024a"),
+  variables = c(
+    # Technical / Weights (REQUIRED)
+    "YEAR", "SERIAL", "PERNUM", "PERWT", "HHWT",
+    
+    # Geographic
+    "STATEFIP",   # State (FIPS code) — for state-level maps/comparisons
+    "MET2023",    # Metropolitan area (2023 delineations) — ~264 named metros
+    "METRO",      # Metropolitan status flag — metro vs non-metro
+    "REGION",     # Census region & division — Northeast, South, Midwest, West
+    
+    # Demographics
+    "AGE",        # Age — filter to 22–27 for recent grads
+    "SEX",        # Sex — gender breakdown
+    "BPL",        # Birthplace — native-born vs foreign-born angle
+    "CITIZEN",    # Citizenship status — naturalized, non-citizen, etc.
+    "MARST",      # Marital status — married vs single earnings gap
+    
+    # Education (CORE)
+    "EDUC",       # Educational attainment (general categories)
+    "EDUCD",      # Educational attainment (detailed) — BA=101, MA=114, Prof=115, PhD=116
+    "DEGFIELD",   # Field of bachelor's degree — THE key variable for by-major analysis
+    "DEGFIELD2",  # Second field of degree — double majors
+    "SCHOOL",     # Currently attending school — filter out current students if needed
+    "SCHLTYPE",   # Public vs private school attended
+    
+    # Work
+    "EMPSTAT",    # Employment status — employed, unemployed, not in labor force
+    "LABFORCE",   # In labor force yes/no — simpler version of EMPSTAT
+    "CLASSWKR",   # Class of worker — private, government, self-employed, nonprofit
+    "OCC2010",    # Occupation (2010 harmonized codes) — what job they actually do
+    "IND",        # Industry (current codes) — tech, healthcare, education, etc.
+    "INDNAICS",   # Industry (NAICS codes) — standard classification, maps to BLS data
+    "UHRSWORK",   # Usual hours worked per week — filter to full-time (35+)
+    "WKSWORK2",   # Weeks worked last year (intervalled) — filter to full-year workers
+    "WORKEDYR",   # Worked last year yes/no
+    "LOOKING",    # Looking for work — context for unemployment
+    
+    # Income
+    "INCWAGE",    # Wage & salary income — PRIMARY outcome (cleanest earnings measure)
+    "INCEARN",    # Total earned income — wages + self-employment combined
+    "INCTOT",     # Total personal income — all sources including investments
+    "POVERTY"     # Poverty status — % of poverty line (100 = at poverty threshold)
+  )
+)
+ 
+# --- Step 3: Submit, wait, download, and read — all in one pipeline! ---
+ 
+# Option A: Full pipeline (submit + wait + download + read)
+# This will take a few minutes while IPUMS processes your extract
+acs_data <- usa_extract %>%
+  submit_extract() %>%
+  wait_for_extract() %>%      # Polls every 60 sec until ready
+  download_extract() %>%
+  read_ipums_micro()
+ 
+# --- Step 4: Quick sanity check ---
+cat("Rows:", nrow(acs_data), "\n")
+cat("Columns:", ncol(acs_data), "\n")
+cat("Years:", unique(acs_data$YEAR), "\n")
+ 
+# Quick look at education distribution
+acs_data %>%
+  filter(AGE >= 22, AGE <= 27) %>%
+  count(EDUCD, wt = PERWT, sort = TRUE) %>%
+  head(10)
+ 
+# --- Step 5: Save locally so you don't have to re-download ---
+saveRDS(acs_data, "acs_recent_grads_2023_2024.rds")
+ 
+# To reload later:
+# acs_data <- readRDS("acs_recent_grads_2023_2024.rds")
+ 
+ 
+# =============================================================================
+# UNDEREMPLOYMENT ANALYSIS — How to classify "college-level" jobs
+# =============================================================================
+#
+# The NY Fed method: if fewer than 50% of workers in an occupation hold a
+# bachelor's degree, that occupation is "non-college." A BA holder working
+# in a non-college job is "underemployed."
+#
+# You can compute this directly from your ACS data using OCC2010:
+#
+#   1. Use the FULL ACS sample (all ages, all education levels)
+#   2. For each OCC2010 code, compute: share of workers with BA or higher
+#   3. If share < 0.50, that OCC2010 = "non-college job"
+#   4. Then filter to your recent grads and check which ones are in non-college jobs
+#
+# Example:
+#
+#   occ_college_share <- acs_data %>%
+#     filter(EMPSTAT == 1, AGE >= 25, AGE <= 64) %>%
+#     group_by(OCC2010) %>%
+#     summarise(
+#       pct_ba = weighted.mean(EDUCD >= 101, w = PERWT),
+#       n = n()
+#     ) %>%
+#     mutate(college_job = pct_ba >= 0.50)
+#
+#   # Then join back to recent grads:
+#   recent_grads <- acs_data %>%
+#     filter(AGE >= 22, AGE <= 27, EDUCD == 101, EMPSTAT == 1) %>%
+#     left_join(occ_college_share, by = "OCC2010")
+#
+#   # Underemployment rate by major:
+#   recent_grads %>%
+#     group_by(DEGFIELD) %>%
+#     summarise(underemployment = weighted.mean(!college_job, w = PERWT))
+#
+# =============================================================================
+ 
+ 
+# =============================================================================
+# UNEMPLOYMENT FROM ACS — No CPS needed!
+# =============================================================================
+#
+# ACS EMPSTAT codes:
+#   1 = Employed
+#   2 = Unemployed
+#   3 = Not in labor force
+#
+# Unemployment rate = unemployed / (employed + unemployed)
+#   i.e., filter to LABFORCE == 2, then weighted.mean(EMPSTAT == 2)
+#
+# Example:
+#
+#   acs_data %>%
+#     filter(AGE >= 22, AGE <= 27, EDUCD == 101, LABFORCE == 2) %>%
+#     group_by(DEGFIELD) %>%
+#     summarise(unemp_rate = weighted.mean(EMPSTAT == 2, w = PERWT))
+#
+# =============================================================================
+
+# =============================================================================
+# TROUBLESHOOTING
+# =============================================================================
+#
+# "Error: 2024 ACS sample not found"
+#   -> The 2024 ACS was released Dec 2025. If IPUMS hasn't processed it yet,
+#      just remove "us2024a" from the samples list and use 2023 only.
+#      Check status: https://usa.ipums.org/usa-action/revisions
+#
+# "Error: Variable not available for sample"
+#   -> Some variables aren't in all samples. The API will tell you which one.
+#      Just remove it from the variables list.
+#      Common issue: MET2023 might not be in older samples.
+#
+# "Extract is taking forever"
+#   -> Large extracts can take 5-15 minutes. wait_for_extract() will keep
+#      polling. You can also check status at:
+#      https://usa.ipums.org/usa-action/data_requests/download
+#
+# "I want to check what's available before submitting"
+#   -> Use get_metadata_catalog("usa") to browse available samples
+#   -> Use get_metadata("usa", sample = "us2023a") for sample details
+#
+# IPUMS Special Codes (NIU = "Not in Universe"):
+#   UHRSWORK: 0 = NIU
+#   INCWAGE:  999999 = NIU (ACS top code also 999999)
+#   INCTOT:   9999999 = NIU
+#   POVERTY:  0 = NIU
+#   OCC2010:  0 = NIU (not employed / no occupation)
+#   WKSWORK2: 0 = NIU
+#   Always filter these before computing stats!
+#
+# =============================================================================
+```
+
+```{r}
+acs_data %>%
+  filter(AGE >= 22, AGE <= 26, EDUCD == 101, LABFORCE == 2) %>%
+  summarise(
+    unemp_rate = round(weighted.mean(EMPSTAT == 2, w = PERWT),4)*100
+  )
+```
+```{r}
+occ_college_share <- acs_data %>%
+  filter(EMPSTAT == 1, AGE >= 25, AGE <= 64) %>%
+  group_by(OCC2010) %>%
+  summarise(
+    pct_ba = weighted.mean(EDUCD >= 101, w = PERWT),
+    n = n()
+  ) %>%
+  mutate(college_job = pct_ba >= 0.50)
+
+# Then join back to recent grads:
+recent_grads <- acs_data %>%
+  filter(AGE >= 22, AGE <= 27, EDUCD == 101, EMPSTAT == 1) %>%
+  left_join(occ_college_share, by = "OCC2010")
+
+# Underemployment rate by major:
+recent_grads %>%
+  group_by(DEGFIELD) %>%
+  summarise(underemployment = weighted.mean(!college_job, w = PERWT))
+```
+
+```{r}
+write.csv(acs_data, "IPUMS_ASC_Higher_Education.csv", row.names = FALSE)
+```
+
+
+
