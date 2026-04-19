@@ -1,0 +1,120 @@
+---
+title: "Filtering Data"
+author: "Denny Huang"
+date: "2026-03-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("############")
+library(tidyverse)
+library(ggplot2)
+library(leaflet)
+library(dplyr)
+# install.packages("dplyr")
+# library(data.table)
+```
+
+
+```{r}
+data =read.csv("IPUMS_ASC_Higher_Education.csv")
+# view(data)
+```
+
+```{r}
+data
+```
+
+```{r}
+sort(unique(data$STATEFIP))
+```
+
+
+```{r}
+# Filter the master DF for the columns we will only need
+wage_by_major = data %>% select(STATEFIP, AGE, EDUCD, DEGFIELD, DEGFIELD2, INCWAGE, SCHOOL)
+# view(wage_by_major)
+```
+
+```{r}
+# Looking at all unique values in the education column
+sort(unique(wage_by_major$EDUCD)) # Keep: Bachelor's degree, Master's degree, Doctoral degree, Professional degree beyond a bachelor's degree
+```
+
+```{r}
+# Filtering the new DF for conditions we want
+# states_subset = c("Arizona", "Washington", "Oregon", "California", "Hawaii")
+states_subset = c("Texas", "Florida", "New York", "California", "Pennsylvania")
+educd_subset = c("Bachelor's degree", "Master's degree", "Doctoral degree", "Professional degree beyond a bachelor's degree")
+wage_by_major = wage_by_major %>% filter(AGE >= 22 & AGE <= 27, STATEFIP %in% states_subset, EDUCD %in% educd_subset, DEGFIELD2 == "N/A", 
+                                         SCHOOL == "No, not in school")
+# view(wage_by_major)
+wage_by_major
+```
+
+```{r}
+# Checking dtype of all columns
+summary.default(wage_by_major)
+```
+
+```{r}
+# Converting variables to their respective dtype
+wage_by_major$AGE = as.numeric(wage_by_major$AGE)
+wage_by_major$INCWAGE = as.numeric(wage_by_major$INCWAGE)
+
+```
+
+```{r}
+state_major_wage = wage_by_major %>% group_by(STATEFIP, DEGFIELD) %>% summarize(median_wage = median(INCWAGE, na.rm=TRUE),
+                                                                              count = n(), .groups="drop")
+state_major_wage
+```
+
+```{r}
+state_major_counts <- state_major_wage %>%
+  group_by(STATEFIP) %>%
+  summarize(
+    unique_majors = n_distinct(DEGFIELD)
+  )
+
+state_major_counts
+```
+
+```{r}
+state_major_wage = state_major_wage %>% filter(count >= 100)
+state_major_wage
+```
+
+```{r}
+state_major_wage_florida = state_major_wage %>% filter(STATEFIP == "Florida") %>% pull(DEGFIELD)
+state_major_wage_florida
+```
+
+```{r}
+# majors_subset = c("Biology and Life Sciences", "Communications", "Criminal Justice and Fire Protection", "Engineering", "Medical and Health Sciences and Services", )
+majors_subset = state_major_wage_florida
+
+state_major_wage = state_major_wage %>% filter(DEGFIELD %in% majors_subset)
+state_major_wage
+```
+
+```{r}
+states_subset = c("Texas", "Florida", "New York", "California", "Pennsylvania")
+educd_subset = c("Bachelor's degree", "Master's degree", "Doctoral degree", "Professional degree beyond a bachelor's degree")
+data = data %>% filter(AGE >= 22 & AGE <= 27, STATEFIP %in% states_subset, EDUCD %in% educd_subset, DEGFIELD2 == "N/A", 
+                                         SCHOOL == "No, not in school")
+
+master_data_frame = data %>% filter(DEGFIELD %in% majors_subset)
+view(master_data_frame)
+```
+
+```{r}
+sort(unique(master_data_frame$STATEFIP))
+```
+
+
+```{r}
+write.csv(master_data_frame, "master_data.csv", row.names = FALSE)
+```
+
