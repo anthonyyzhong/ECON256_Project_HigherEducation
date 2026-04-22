@@ -1,0 +1,219 @@
+---
+title: "Median Wage by Major"
+author: "Denny Huang"
+date: "2026-04-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("C:/Users/dennn/Downloads/ECON256")
+library(tidyverse)
+library(ggplot2)
+library(leaflet)
+library(dplyr)
+# install.packages("dplyr")
+# library(data.table)
+```
+
+```{r}
+df = read.csv("master_data.csv")
+df
+```
+
+```{r}
+wage_by_major = df %>% select(STATEFIP, AGE, EDUCD, DEGFIELD, INCWAGE)
+```
+
+```{r}
+# Filtering the new DF for conditions we want
+states_subset = c("Texas", "Florida", "New York", "California", "Pennsylvania")
+educd_subset = c("Bachelor's degree", "Master's degree", "Doctoral degree", "Professional degree beyond a bachelor's degree")
+wage_by_major = wage_by_major %>% filter(AGE >= 22 & AGE <= 27, STATEFIP %in% states_subset, EDUCD %in% educd_subset)
+# view(wage_by_major)
+wage_by_major
+```
+
+```{r}
+# Converting variables to their respective dtype
+wage_by_major$AGE = as.numeric(wage_by_major$AGE)
+wage_by_major$INCWAGE = as.numeric(wage_by_major$INCWAGE)
+
+```
+
+```{r}
+# Get median wage by degrees
+major_wage = wage_by_major %>% group_by(DEGFIELD) %>% summarize(median_wage = median(INCWAGE, na.rm=TRUE), .groups="drop")
+major_wage
+
+# Get median wage by degrees in each state
+state_major_wage = wage_by_major %>% group_by(STATEFIP, DEGFIELD) %>% summarize(median_wage = median(INCWAGE, na.rm=TRUE), .groups="drop")
+state_major_wage
+```
+
+```{r}
+# Order degrees by smallest median wage to largest median wage, fix x labels to display vertically with a slight slant, rename x and y labels, add a title, remove gridlines
+major_wage_bar_graph <- ggplot(
+  data = major_wage,
+  aes(
+    x = median_wage,
+    y = reorder(DEGFIELD, median_wage),
+    fill = median_wage
+  )
+) +
+  geom_col() +
+  scale_fill_gradient(
+    low = "lightblue",
+    high = "darkblue"
+  ) +
+  labs(
+    title = "Median Early-Career Wage by Major",
+    x = "Median Wage (USD)",
+    y = "Field of Degree",
+    fill = "Median Wage"
+  ) +
+  theme_minimal()
+
+major_wage_bar_graph
+```
+```{r}
+major_wage_california_bar_graph <- state_major_wage %>%
+  filter(STATEFIP == "California") %>%
+  ggplot(
+    aes(
+      x = median_wage,
+      y = reorder(DEGFIELD, median_wage),
+      fill = median_wage
+    )
+  ) +
+  geom_col() +
+  scale_fill_gradient(
+    low = "lightblue",
+    high = "darkblue"
+  ) +
+  labs(
+    title = "Median Early-Career Wage by Major (California)",
+    x = "Median Wage (USD)",
+    y = "Field of Degree",
+    fill = "Median Wage"
+  ) +
+  theme_minimal()
+
+major_wage_california_bar_graph
+```
+
+
+```{r}
+major_wage_florida_bar_graph <- state_major_wage %>%
+  filter(STATEFIP == "Florida") %>%
+  ggplot(
+    aes(
+      x = median_wage,
+      y = reorder(DEGFIELD, median_wage),
+      fill = median_wage
+    )
+  ) +
+  geom_col() +
+  scale_fill_gradient(
+    low = "lightblue",
+    high = "darkblue"
+  ) +
+  labs(
+    title = "Median Early-Career Wage by Major (Florida)",
+    x = "Median Wage (USD)",
+    y = "Field of Degree",
+    fill = "Median Wage"
+  ) +
+  theme_minimal()
+
+major_wage_florida_bar_graph
+```
+
+
+```{r}
+major_wage_newyork_bar_graph <- state_major_wage %>%
+  filter(STATEFIP == "New York") %>%
+  ggplot(
+    aes(
+      x = median_wage,
+      y = reorder(DEGFIELD, median_wage),
+      fill = median_wage
+    )
+  ) +
+  geom_col() +
+  scale_fill_gradient(
+    low = "lightblue",
+    high = "darkblue"
+  ) +
+  labs(
+    title = "Median Early-Career Wage by Major (New York)",
+    x = "Median Wage (USD)",
+    y = "Field of Degree",
+    fill = "Median Wage"
+  ) +
+  theme_minimal()
+
+major_wage_newyork_bar_graph
+```
+
+
+```{r}
+major_wage_texas_bar_graph <- state_major_wage %>%
+  filter(STATEFIP == "Texas") %>%
+  ggplot(
+    aes(
+      x = median_wage,
+      y = reorder(DEGFIELD, median_wage),
+      fill = median_wage
+    )
+  ) +
+  geom_col() +
+  scale_fill_gradient(
+    low = "lightblue",
+    high = "darkblue"
+  ) +
+  labs(
+    title = "Median Early-Career Wage by Major (Texas)",
+    x = "Median Wage (USD)",
+    y = "Field of Degree",
+    fill = "Median Wage"
+  ) +
+  theme_minimal()
+
+major_wage_texas_bar_graph
+```
+
+
+```{r}
+major_wage_pennsylvania_bar_graph <- state_major_wage %>%
+  filter(STATEFIP == "Pennsylvania") %>%
+  ggplot(
+    aes(
+      x = median_wage,
+      y = reorder(DEGFIELD, median_wage),
+      fill = median_wage
+    )
+  ) +
+  geom_col() +
+  scale_fill_gradient(
+    low = "lightblue",
+    high = "darkblue"
+  ) +
+  labs(
+    title = "Median Early-Career Wage by Major (Pennsylvania)",
+    x = "Median Wage (USD)",
+    y = "Field of Degree",
+    fill = "Median Wage"
+  ) +
+  theme_minimal()
+
+major_wage_pennsylvania_bar_graph
+```
+
+```{r}
+# Save graphs
+
+
+```
+
+
