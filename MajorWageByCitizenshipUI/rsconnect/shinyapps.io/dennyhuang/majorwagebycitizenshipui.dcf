@@ -1,0 +1,12 @@
+name: majorwagebycitizenshipui
+title:
+username: dennyhuang
+account: dennyhuang
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17234408
+bundleId: 11911061
+url: https://dennyhuang.shinyapps.io/majorwagebycitizenshipui/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
